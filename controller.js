@@ -1,8 +1,9 @@
 // @flow
 import type {Resp} from './test.js';
+import type {User} from './test.js';
 type Headers<T> = T;
 type JSONResp<T> = T;
-type QS<T> = T;
+type QueryString<T> = T;
 
 function route(method, path) {
   // create swagger endpoint
@@ -22,6 +23,6 @@ function route(method, path) {
 // static analysis takes params for endpoint here
 // + GraphQL
 type User = {name: string}
-route('POST', '/track')((token: Headers<string>, event: QS<string>): JSONResp<Resp<{name: string}>> => {
+route({method: 'POST', path: '/track'})((token: Headers<string>, event: QueryString<string>): JSONResp<Resp<User>> => {
   return {error: false, data: {name: 'fucker'}}
 })
