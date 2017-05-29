@@ -1,0 +1,26 @@
+{
+  "name": "node-http-fp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "controller.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "flow-bin": "^0.47.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yarax/tapi.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/yarax/tapi/issues"
+  },
+  "homepage": "https://github.com/yarax/tapi#readme"
+}

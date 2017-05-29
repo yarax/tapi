@@ -1,6 +1,7 @@
 // @flow
-
+import type {Resp} from './test.js';
 type Headers<T> = T;
+type JSONResp<T> = T;
 type QS<T> = T;
 
 function route(method, path) {
@@ -14,11 +15,13 @@ function route(method, path) {
       setHeaders(method, path, res);
       res.send(result);
     });
+
   }
 }
 
 // static analysis takes params for endpoint here
 // + GraphQL
-route('POST', '/track')((token: Headers<string>, event: QS<string>): JSONResp<{}> => {
-
+type User = {name: string}
+route('POST', '/track')((token: Headers<string>, event: QS<string>): JSONResp<Resp<{name: string}>> => {
+  return {error: false, data: {name: 'fucker'}}
 })
