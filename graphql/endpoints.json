@@ -1,0 +1,1 @@
+{"pet":{"parameters":[{"name":"id","type":"number","jsonSchema":{"type":"number"}}],"description":"pet","response":{"properties":{"name":{"type":"string"},"id":{"type":"number"}},"required":["name","id"]}}}

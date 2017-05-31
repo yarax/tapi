@@ -2,7 +2,10 @@
 import express from 'express';
 import {getSwaggerPathFromExpress} from './helpers';
 import tv4 from 'tv4';
+import {schemaFromEndpoints} from 'swagger-to-graphql';
+import graphqlHTTP from 'express-graphql';
 import type {HTTPRouteOptions, GraphQLResolverOptions} from './types';
+import gqlEndpoints from '../../graphql/endpoints.json';
 const bodyParser = require('body-parser');
 const app = express();
 
@@ -12,6 +15,7 @@ class HTTPError extends Error {
 
 app.use(bodyParser.json());
 app.use(express.static(`${__dirname}/../../swagger/`));
+
 app.use((err, req, res, next) => {
   const code =  err.statusCode || 500;
   res.status(code).send(err.message);
@@ -76,13 +80,27 @@ export const HTTPRoute = (options: HTTPRouteOptions): Function => {
 
 export const GraphQLResolver = (options: GraphQLResolverOptions): Function => {
   return (func: Function) => {
-
+    gqlEndpoints[options.typeName].resolver = func;
   }
 }
 
 export const run = () => {
+  if (Object.keys(gqlEndpoints).length) {
+    const schema = schemaFromEndpoints(gqlEndpoints);
+    app.use('/graphql', graphqlHTTP(() => {
+      return {
+        schema,
+        context: {
+          GQLProxyBaseUrl: 'http://localhost:3000/'
+        },
+        graphiql: true
+      };
+    }));
+    console.log('GraphQL API: http://localhost:3000/graphql');
+  }
+  console.log('REST API: http://localhost:3000/ui/dist/');
   // move to config
   app.listen(3000, () => {
-    console.log('http://localhost:3000/');
+    console.log('API server: http://localhost:3000/');
   });
 }

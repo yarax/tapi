@@ -1,7 +1,7 @@
 // @flow
 import {getSwaggerPathFromExpress} from './helpers';
 import {schemaFromEndpoints} from 'swagger-to-graphql';
-import graphql from 'graphql';
+import { printSchema } from 'graphql'
 import {dirname} from 'path';
 type Location = {
   start: {
@@ -297,7 +297,7 @@ function isExpressionHTTPRoute(expr) {
 
 function isExpressionGraphQLRoute(expr) {
   function debug(cs) {
-    console.log(`expression at line: ${expr.loc.start.line} pretending to be a GQL route, condition ${cs} of 9`);
+    console.log(`expression at line: ${expr.loc.start.line} pretending to be a GQL route, condition ${cs} of 10`);
     return true;
   }
   return expr.expression && debug(1) &&
@@ -311,7 +311,7 @@ function isExpressionGraphQLRoute(expr) {
     ['typeName', 'isMutation'].includes(expr.expression.callee.arguments[0].properties[0].key.name) && debug(10);
 }
 
-fucntion handleGraphQL(expressionStatement, fn) {
+function handleGraphQL(expressionStatement, fn) {
   const func = expressionStatement.expression.arguments[0];
   const params = func.params;
 
@@ -328,7 +328,7 @@ fucntion handleGraphQL(expressionStatement, fn) {
       } else {
         paramObj.type = paramType;
       }
-      return {name: param.name, types[paramI], jsonSchema: paramObj};
+      return {name: param.name, type: types[paramI], jsonSchema: paramObj};
     });
     const {typeName, isMutation} = getObjectFromAst(expressionStatement.expression.callee.arguments[0].properties);
     if (gqlEndpoints[typeName]) {
@@ -338,10 +338,7 @@ fucntion handleGraphQL(expressionStatement, fn) {
       parameters,
       description: typeName,
       response: types[types.length - 1],
-      mutation: isMutation,
-      request: (args) => {
-        
-      }
+      mutation: isMutation
     }
   });
 }
@@ -350,14 +347,16 @@ function persistAPI() {
   return fs.writeFileAsync(`${__dirname}/../../swagger/swagger.json`, JSON.stringify(swagger)).then(() => {
     if (Object.keys(gqlEndpoints)) {
       const schema = schemaFromEndpoints(gqlEndpoints);
-      return fs.writeFileAsync(`${__dirname}/../../graphql/graphql.json`, graphql.printSchema(schema));
+      return fs.writeFileAsync(`${__dirname}/../../graphql/types.json`, printSchema(schema));
     }
+  }).then(() => {
+    return fs.writeFileAsync(`${__dirname}/../../graphql/endpoints.json`, JSON.stringify(gqlEndpoints));
   });
 }
 
 function getObjectFromAst(propsAst) {
-  const keys = expressionStatement.expression.callee.arguments[0].properties.map(prop => prop.key.name);
-  const vals = expressionStatement.expression.callee.arguments[0].properties.map(prop => prop.value.value);
+  const keys = propsAst.map(prop => prop.key.name);
+  const vals = propsAst.map(prop => prop.value.value);
   return keys.reduce((obj, key, j) => {
     obj[key] = vals[j];
     return obj;
@@ -394,11 +393,6 @@ function handleSwagger(expressionStatement, fn) {
     const produces = mapHTTPTypeToContentType(func.returnType.typeAnnotation.id.name);
 
     buildSwagger(path, method, swaggerParams, types[types.length - 1], produces);
-  }).then(() => {
-    return persistAPI();
-  }).then(() => {
-    console.log('API: http://localhost:3000/ui/dist/');
-    return swagger;
   });
 }
 
@@ -422,14 +416,18 @@ function findServiceTypes(ast: AST, fn: string) {
       Promise.resolve();
     }
   });
-  return Promise.all(promises);
+  return Promise.all(promises).then(() => {
+    return persistAPI();
+  }).then(() => {
+    return swagger;
+  });
 }
 
 function buildSwagger(path, method, args, responseType, produces) {
   if (!path) throw new Error('No path provided for swagger');
   if (!method) throw new Error('No method provided for swagger');
   // @TODO check + support multiple args
-
+  method = method.toLowerCase();
   path = getSwaggerPathFromExpress(path);
 
   if (!swagger.paths[path]) {

@@ -1,0 +1,13 @@
+type pet {
+  name: String
+  id: Int
+}
+
+type Query {
+  viewer: viewer
+}
+
+type viewer {
+  # pet
+  pet(id: Int): pet
+}
