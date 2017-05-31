@@ -1,5 +1,8 @@
 // @flow
 import {getSwaggerPathFromExpress} from './helpers';
+import {schemaFromEndpoints} from 'swagger-to-graphql';
+import graphql from 'graphql';
+import {dirname} from 'path';
 type Location = {
   start: {
     line: number,
@@ -9,6 +12,13 @@ type Location = {
     line: number,
     column: number
   }
+}
+type SwaggerParam = {
+  name: string,
+  in: string,
+  required: boolean,
+  type: ?string,
+  schema: ?Object
 }
 type FnLocation = {filename: string, loc: Location}
 type AST = {body: Array<any>}
@@ -26,6 +36,7 @@ const swagger = {
   paths: {},
   definitions: {}
 };
+const gqlEndpoints = {};
 
 function flowGetDef(fn, loc: Location, typeName) {
   const line = loc.start.line;
@@ -87,7 +98,7 @@ function getCodeFromLocation(location: FnLocation) {
   });
 }
 
-function getAstByCode(source: string, type: 'flowType' | 'js'):AST {
+function getAstByCode(source: string):AST {
   try {
     return babylon.parse(source, {sourceType: 'module', plugins: ['flow']}).program;
   } catch (e) {
@@ -95,9 +106,17 @@ function getAstByCode(source: string, type: 'flowType' | 'js'):AST {
   }
 }
 
+function analyzeFolder(dir: string) {
+  return fs.readdirAsync(dir).then(list => {
+    return Promise.all(list.map(fileName => {
+      return analyzeFile(`${dir}/${fileName}`);
+    }));
+  });
+}
+
 function analyzeFile(fn: string) {
   return fs.readFileAsync(fn).then(source => {
-    const ast = getAstByCode(source.toString(), 'js');
+    const ast = getAstByCode(source.toString());
     return findServiceTypes(ast, fn);
   });
 
@@ -184,8 +203,8 @@ function getObjectJSONSchema(node, args) {
   }
 }
 
-function findMatchedLocation(node, location) {
-  function areLocMatches(astLoc) {
+function findMatchedLocation(node: any, location: FnLocation) {
+  function areLocMatches(astLoc: Location) {
     return astLoc.start.line === location.loc.start.line && astLoc.start.column + 1 === location.loc.start.column
   }
 
@@ -243,6 +262,7 @@ function resolveObjectWithArgs(type, promisedArgs, fn) {
   });
 }
 
+// Return JSON Schema for ast Flow type
 function resolveType(type, fn) {
   if (type && (type.type === 'TypeAnnotation' || type.type === 'GenericTypeAnnotation')) {
     let promisedArgs;
@@ -259,9 +279,9 @@ function resolveType(type, fn) {
 }
 
 // route({method: 'POST', path: '/track'})((token: Headers<string>, event: QueryString<string>): JSONResp<Resp<User>> => {
-function isExpressionRoute(expr) {
+function isExpressionHTTPRoute(expr) {
   function debug(cs) {
-    //console.log(`expression at line: ${expr.loc.start.line} pretending to be a route, condition ${cs} of 9`);
+    console.log(`expression at line: ${expr.loc.start.line} pretending to be a HTTP route, condition ${cs} of 9`);
     return true;
   }
   return expr.expression && debug(1) &&
@@ -275,6 +295,113 @@ function isExpressionRoute(expr) {
     expr.expression.callee.arguments[0].type === 'ObjectExpression' && debug(9);
 }
 
+function isExpressionGraphQLRoute(expr) {
+  function debug(cs) {
+    console.log(`expression at line: ${expr.loc.start.line} pretending to be a GQL route, condition ${cs} of 9`);
+    return true;
+  }
+  return expr.expression && debug(1) &&
+    expr.expression.type === 'CallExpression' && debug(2) &&
+    expr.expression.arguments && debug(3) &&
+    expr.expression.arguments.length === 1 && debug(4) &&
+    expr.expression.arguments[0].type === 'ArrowFunctionExpression' && debug(5) &&
+    expr.expression.arguments[0].returnType && debug(6) &&
+    expr.expression.callee.arguments.length === 1 && debug(8) &&
+    expr.expression.callee.arguments[0].type === 'ObjectExpression' && debug(9) &&
+    ['typeName', 'isMutation'].includes(expr.expression.callee.arguments[0].properties[0].key.name) && debug(10);
+}
+
+fucntion handleGraphQL(expressionStatement, fn) {
+  const func = expressionStatement.expression.arguments[0];
+  const params = func.params;
+
+  const promises = (params || []).map(param => resolveType(param.typeAnnotation.typeAnnotation, fn));
+  if (func.returnType) {
+    promises.push(resolveType(func.returnType.typeAnnotation, fn));
+  }
+  return Promise.all(promises).then((types) => {
+    const parameters = params.map((param, paramI) => {
+      const paramType = types[paramI];
+      const paramObj = {};
+      if (typeof paramType === 'object') {
+        paramObj.schema = paramType;
+      } else {
+        paramObj.type = paramType;
+      }
+      return {name: param.name, types[paramI], jsonSchema: paramObj};
+    });
+    const {typeName, isMutation} = getObjectFromAst(expressionStatement.expression.callee.arguments[0].properties);
+    if (gqlEndpoints[typeName]) {
+      gqlEndpoints[typeName] = {};
+    }
+    gqlEndpoints[typeName] = {
+      parameters,
+      description: typeName,
+      response: types[types.length - 1],
+      mutation: isMutation,
+      request: (args) => {
+        
+      }
+    }
+  });
+}
+
+function persistAPI() {
+  return fs.writeFileAsync(`${__dirname}/../../swagger/swagger.json`, JSON.stringify(swagger)).then(() => {
+    if (Object.keys(gqlEndpoints)) {
+      const schema = schemaFromEndpoints(gqlEndpoints);
+      return fs.writeFileAsync(`${__dirname}/../../graphql/graphql.json`, graphql.printSchema(schema));
+    }
+  });
+}
+
+function getObjectFromAst(propsAst) {
+  const keys = expressionStatement.expression.callee.arguments[0].properties.map(prop => prop.key.name);
+  const vals = expressionStatement.expression.callee.arguments[0].properties.map(prop => prop.value.value);
+  return keys.reduce((obj, key, j) => {
+    obj[key] = vals[j];
+    return obj;
+  }, {});
+}
+
+function handleSwagger(expressionStatement, fn) {
+  const func = expressionStatement.expression.arguments[0];
+  const params = func.params;
+
+  const promises = (params || []).map(param => resolveType(param.typeAnnotation.typeAnnotation, fn));
+
+  if (func.returnType) {
+    promises.push(resolveType(func.returnType.typeAnnotation, fn));
+  }
+  return Promise.all(promises).then((types) => {
+    
+    const {path, method} = getObjectFromAst(expressionStatement.expression.callee.arguments[0].properties);
+
+    const swaggerParams = params.map((param, paramI) => {
+      const paramType = types[paramI];
+      const paramObj: SwaggerParam =  {
+        name: param.name,
+        in: mapHTTPTypeToSwaggerIn(param.typeAnnotation.typeAnnotation.id.name),
+        required: param.typeAnnotation.typeAnnotation.type !== 'NullableTypeAnnotation'
+      };
+      if (typeof paramType === 'object') {
+        paramObj.schema = paramType;
+      } else {
+        paramObj.type = paramType;
+      }
+      return paramObj;
+    });
+    const produces = mapHTTPTypeToContentType(func.returnType.typeAnnotation.id.name);
+
+    buildSwagger(path, method, swaggerParams, types[types.length - 1], produces);
+  }).then(() => {
+    return persistAPI();
+  }).then(() => {
+    console.log('API: http://localhost:3000/ui/dist/');
+    return swagger;
+  });
+}
+
 /**
  * Route is:
  * 1. root expression currying call
@@ -286,48 +413,10 @@ function findServiceTypes(ast: AST, fn: string) {
   const promises = (ast.body || [])
   .filter(root => root.type === 'ExpressionStatement')
   .map(expressionStatement => {
-    if (isExpressionRoute(expressionStatement)) {
-      const func = expressionStatement.expression.arguments[0];
-      const params = func.params;
-
-      const promises = (params || []).map(param => resolveType(param.typeAnnotation.typeAnnotation, fn));
-
-      if (func.returnType) {
-        promises.push(resolveType(func.returnType.typeAnnotation, fn));
-      }
-      return Promise.all(promises).then((types) => {
-        const keys = expressionStatement.expression.callee.arguments[0].properties.map(prop => prop.key.name);
-        const vals = expressionStatement.expression.callee.arguments[0].properties.map(prop => prop.value.value);
-        let path, method;
-        keys.forEach((key, j) => {
-          if (key === 'path') path = vals[j];
-          if (key === 'method') method = vals[j].toLowerCase();
-        });
-
-        const swaggerParams = params.map((param, paramI) => {
-          const paramType = types[paramI];
-          const paramObj =  {
-            name: param.name,
-            in: mapHTTPTypeToSwaggerIn(param.typeAnnotation.typeAnnotation.id.name),
-            required: param.typeAnnotation.typeAnnotation.type !== 'NullableTypeAnnotation'
-          };
-          if (typeof paramType === 'object') {
-            paramObj.schema = paramType;
-          } else {
-            paramObj.type = paramType;
-          }
-          return paramObj;
-        });
-        const produces = mapHTTPTypeToContentType(func.returnType.typeAnnotation.id.name);
-
-        buildSwagger(path, method, swaggerParams, types[types.length - 1], produces);
-      }).then(() => {
-        return fs.writeFileAsync(`${__dirname}/../../swagger/swagger.json`, JSON.stringify(swagger));
-      }).then(() => {
-        console.log('API: http://localhost:3000/ui/dist/');
-        return swagger;
-      });
-
+    if (isExpressionHTTPRoute(expressionStatement)) {
+      return handleSwagger(expressionStatement, fn);
+    } else if (isExpressionGraphQLRoute(expressionStatement)) {
+      return handleGraphQL(expressionStatement, fn);
     } else {
       console.log(`No routes`);
       Promise.resolve();
@@ -366,5 +455,6 @@ function buildSwagger(path, method, args, responseType, produces) {
 module.exports = {
   analyzeFile,
   findServiceTypes,
-  getAstByCode
+  getAstByCode,
+  analyzeFolder
 };

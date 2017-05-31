@@ -2,8 +2,13 @@
 import express from 'express';
 import {getSwaggerPathFromExpress} from './helpers';
 import tv4 from 'tv4';
+import type {HTTPRouteOptions, GraphQLResolverOptions} from './types';
 const bodyParser = require('body-parser');
 const app = express();
+
+class HTTPError extends Error {
+  statusCode: number
+}
 
 app.use(bodyParser.json());
 app.use(express.static(`${__dirname}/../../swagger/`));
@@ -14,10 +19,6 @@ app.use((err, req, res, next) => {
   next();
 });
 
-type RouteOptions = {
-  method: string,
-  path: string
-}
 // move to config
 const basePath = '/v1';
 
@@ -25,7 +26,7 @@ function validate(val, type) {
   const res = tv4.validateResult(val, type);
   //console.log(val, type, res);
   if (res.error) {
-    const err = new Error(res.error.message);
+    const err = new HTTPError(res.error.message);
     err.statusCode = 400;
     throw err;
   }
@@ -37,7 +38,7 @@ function getArgsFromReq(req, method, path) {
   const swagger = require('../../swagger/swagger.json');
   const endpoint = swagger.paths[swaggerPath] && swagger.paths[swaggerPath][method];
   if (!endpoint) {
-    const err = new Error(`Endpoint ${method} ${swaggerPath} was not found`);
+    const err = new HTTPError(`Endpoint ${method} ${swaggerPath} was not found`);
     err.statusCode = 404;
     throw err;
   }
@@ -55,12 +56,12 @@ function getArgsFromReq(req, method, path) {
   });
 }
 
-export const route = (options: RouteOptions) => {
+export const HTTPRoute = (options: HTTPRouteOptions): Function => {
   // create swagger endpoint
   let {method, path} = options;
   method = method.toLowerCase();
   const listenPath = `${basePath}${path}`;
-  return (func) => {
+  return (func: Function) => {
     console.log('Bound route', method, path);
     app[method](listenPath, (req, res, next) => {
       const args = getArgsFromReq(req, method, path);
@@ -70,6 +71,12 @@ export const route = (options: RouteOptions) => {
       //setHeaders(method, path, res);
       res.send(result);
     });
+  }
+}
+
+export const GraphQLResolver = (options: GraphQLResolverOptions): Function => {
+  return (func: Function) => {
+
   }
 }
 

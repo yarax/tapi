@@ -1,7 +1,7 @@
-require('./controller');
+require('./controllers/controller');
 import {run} from './src/lib/app';
-const {analyzeFile} = require('./src/lib/static-analysis');
+const {analyzeFolder} = require('./src/lib/static-analysis');
 
-analyzeFile(`${__dirname}/controller.js`).then(() => {
+analyzeFolder(`${__dirname}/controllers`).then(() => {
   run();
 });
