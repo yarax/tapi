@@ -184,24 +184,43 @@ function getObjectJSONSchema(node, args) {
   }
 }
 
-function getAstOfTypeFromFile(location: FnLocation) {
-  // @TODO ast cache
+function findMatchedLocation(node, location) {
   function areLocMatches(astLoc) {
     return astLoc.start.line === location.loc.start.line && astLoc.start.column + 1 === location.loc.start.column
   }
+
+  if (node && node.loc && areLocMatches(node.loc)) {
+    return node;
+  } else {
+    return Object.values(node).find(chNode => {
+      if (chNode && typeof chNode === 'object') {
+        return findMatchedLocation(chNode, location)
+      } else {
+        return false;
+      }
+    });
+  }
+
+}
+
+function getAstOfTypeFromFile(location: FnLocation) {
+  // @TODO ast cache
+
   return fs.readFileAsync(location.filename).then(source => {
     const ast = getAstByCode(source.toString());
     // @TODO change to visitor pattern
-    let type = ast.body.find(exp => {
-      const loc = exp.id ? exp.id.loc : exp.loc;
-      return ['ExportNamedDeclaration', 'TypeAlias'].includes(exp.type) && areLocMatches(loc);
-    });
-    if (type.type === 'ExportNamedDeclaration') {
-      type = type.declaration;
-    }
+    let type = ast.body.find(bodyNode => findMatchedLocation(bodyNode, location));
+    // let type = ast.body.find(exp => {
+    //   const loc = exp.id ? exp.id.loc : exp.loc;
+    //   return ['ExportNamedDeclaration', 'TypeAlias'].includes(exp.type) && areLocMatches(loc);
+    // });
     if (!type) {
       throw new Error(`Type is not found by given location: ${JSON.stringify(location)}`);
     }
+    if (type.type === 'ExportNamedDeclaration') {
+      type = type.declaration;
+    }
+
     if (type.type !== 'TypeAlias') {
       throw new Error(`Found non TypeAlias declaration, donno how to handle: ${JSON.stringify(location)}`);
     }

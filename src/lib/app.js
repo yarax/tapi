@@ -4,7 +4,15 @@ import {getSwaggerPathFromExpress} from './helpers';
 import tv4 from 'tv4';
 const bodyParser = require('body-parser');
 const app = express();
+
 app.use(bodyParser.json());
+app.use(express.static(`${__dirname}/../../swagger/`));
+app.use((err, req, res, next) => {
+  const code =  err.statusCode || 500;
+  res.status(code).send(err.message);
+  console.log(err);
+  next();
+});
 
 type RouteOptions = {
   method: string,
@@ -64,14 +72,6 @@ export const route = (options: RouteOptions) => {
     });
   }
 }
-
-app.use(express.static(`${__dirname}/../../swagger/`));
-app.use((err, req, res, next) => {
-  const code =  err.statusCode || 500;
-  res.status(code).send(err.message);
-  console.log(err);
-  next();
-});
 
 export const run = () => {
   // move to config
