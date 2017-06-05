@@ -281,7 +281,7 @@ function resolveType(type, fn) {
 // route({method: 'POST', path: '/track'})((token: Headers<string>, event: QueryString<string>): JSONResp<Resp<User>> => {
 function isExpressionHTTPRoute(expr) {
   function debug(cs) {
-    console.log(`expression at line: ${expr.loc.start.line} pretending to be a HTTP route, condition ${cs} of 9`);
+    //console.log(`expression at line: ${expr.loc.start.line} pretending to be a HTTP route, condition ${cs} of 9`);
     return true;
   }
   return expr.expression && debug(1) &&
@@ -297,7 +297,7 @@ function isExpressionHTTPRoute(expr) {
 
 function isExpressionGraphQLRoute(expr) {
   function debug(cs) {
-    console.log(`expression at line: ${expr.loc.start.line} pretending to be a GQL route, condition ${cs} of 10`);
+    //console.log(`expression at line: ${expr.loc.start.line} pretending to be a GQL route, condition ${cs} of 10`);
     return true;
   }
   return expr.expression && debug(1) &&
