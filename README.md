@@ -1,4 +1,4 @@
-# Typed* Node.js API developemnt
+# Typed* Node.js API development
 
 This is not the finished framework or tool, this is a proof of concept for following ideas in Node.js development:
 
