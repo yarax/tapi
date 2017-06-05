@@ -5,7 +5,7 @@ This is not the finished framework or tool, this is a proof of concept for follo
 * Controllers must be typed. It allows to cover with types all further code.
 * API endpoint must be decribed only once (single source of truth, DRY)
 * API must have UI and documentation
-* Data must be validated automatically before getting to controller accroding endpoint description.
+* Data must be validated automatically in runtime before getting to controller accroding endpoint description.
 * API can be in any types and formats (REST, GraphQL, RPC etc.) and not be coupled with business logic
 
 The main idea of current implementation is generating API from AST during covering controller with types.
