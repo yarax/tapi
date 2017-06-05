@@ -9,7 +9,7 @@ This is not the finished framework or tool, this is a proof of concept for follo
 * API can be any type or format (REST, GraphQL, RPC etc.) and not be coupled with business logic
 
 The main idea of current implementation is generating API from AST during covering controller with types.
-It allows to cover all points mentioned above and keep development really fast.
+It allows to maintain all points mentioned above and keep development really fast.
 
 ## Usage
 
