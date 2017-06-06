@@ -3,7 +3,7 @@
 This is not the finished framework or tool, this is a proof of concept for following ideas in Node.js development:
 
 * Controllers must be typed. It allows to cover with types all further code.
-* API endpoint must be decribed only once (single source of truth, DRY)
+* API endpoint must be described only once (single source of truth, DRY)
 * API must have UI and documentation
 * Data must be validated automatically in runtime before getting to controller according endpoint description.
 * API can be any type or format (REST, GraphQL, RPC etc.) and not be coupled with business logic
